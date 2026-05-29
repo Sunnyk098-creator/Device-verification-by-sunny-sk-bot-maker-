@@ -74,17 +74,19 @@
         const userId = urlParams.get('tguserid') || 'unknown_user';
         const userName = urlParams.get('name') || 'Unknown';
 
-        // Advanced Device Fingerprint (Resolution add kiya hai taaki Same-House mein farq samajh aaye)
-        let os = "Unknown";
-        let browser = "Unknown";
-        const ua = navigator.userAgent;
-        if(ua.includes("Win")) os = "Windows";
-        else if(ua.includes("Android")) os = "Android";
-        else if(ua.includes("Mac") && !ua.includes("iPhone")) os = "MacOS";
-        else if(ua.includes("iPhone")) os = "iOS";
-        
-        if(ua.includes("Chrome")) browser = "Chrome";
-        else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+        // --- THE SECRET DEVICE ID LOGIC ---
+        // Browser mein check karega ki pehle se ID hai ya nahi, nahi toh nayi banayega
+        let secretDeviceId = localStorage.getItem('bot_device_secret');
+        if (!secretDeviceId) {
+            secretDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+            localStorage.setItem('bot_device_secret', secretDeviceId);
+        }
+
+        // Basic Device Info
+        let os = "Unknown"; let browser = "Unknown"; const ua = navigator.userAgent;
+        if(ua.includes("Win")) os = "Windows"; else if(ua.includes("Android")) os = "Android";
+        else if(ua.includes("Mac") && !ua.includes("iPhone")) os = "MacOS"; else if(ua.includes("iPhone")) os = "iOS";
+        if(ua.includes("Chrome")) browser = "Chrome"; else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
         else if(ua.includes("Firefox")) browser = "Firefox";
 
         const deviceInfo = `${os} - ${browser} (${screen.width}x${screen.height})`;
@@ -97,34 +99,22 @@
             const title = document.getElementById('result-title');
             const desc = document.getElementById('result-desc');
             
-            icon.className = 'result-icon'; // Reset classes
-            desc.style.display = 'none';    // Hide desc by default
+            icon.className = 'result-icon';
+            desc.style.display = 'none';
 
             if (status === 'success') {
-                icon.classList.add('success');
-                icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
-                title.innerText = "Verification Successful";
-                title.style.color = "var(--success)";
-            } 
-            else if (status === 'already_verified') {
-                icon.classList.add('already');
-                icon.innerHTML = '<i class="fa-solid fa-user-shield"></i>';
-                title.innerText = "Already Verified";
-                title.style.color = "var(--accent-blue)";
-            } 
-            else if (status === 'vpn_detected') {
-                icon.classList.add('warning');
-                icon.innerHTML = '<i class="fa-solid fa-shield-virus"></i>';
-                title.innerText = "VPN Detected";
-                title.style.color = "var(--warning)";
-                desc.innerText = "Please turn off your VPN/Proxy and refresh the page to proceed.";
-                desc.style.display = 'block';
-            } 
-            else {
-                icon.classList.add('failed');
-                icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
-                title.innerText = "Verification Failed";
-                title.style.color = "var(--danger)";
+                icon.classList.add('success'); icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+                title.innerText = "Verification Successful"; title.style.color = "var(--success)";
+            } else if (status === 'already_verified') {
+                icon.classList.add('already'); icon.innerHTML = '<i class="fa-solid fa-user-shield"></i>';
+                title.innerText = "Already Verified"; title.style.color = "var(--accent-blue)";
+            } else if (status === 'vpn_detected') {
+                icon.classList.add('warning'); icon.innerHTML = '<i class="fa-solid fa-shield-virus"></i>';
+                title.innerText = "VPN Detected"; title.style.color = "var(--warning)";
+                desc.innerText = "Please turn off your VPN/Proxy and refresh the page to proceed."; desc.style.display = 'block';
+            } else {
+                icon.classList.add('failed'); icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                title.innerText = "Verification Failed"; title.style.color = "var(--danger)";
             }
         }
 
@@ -153,10 +143,11 @@
             }
 
             try {
+                // Backend ko IP, Device Info aur naya Secret ID sab bhej rahe hain
                 const response = await fetch(BACKEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ botName, userId, userName, ip: userIP, deviceData: deviceInfo })
+                    body: JSON.stringify({ botName, userId, userName, ip: userIP, deviceData: deviceInfo, secretId: secretDeviceId })
                 });
                 const result = await response.json();
                 renderResult(result.status); 
