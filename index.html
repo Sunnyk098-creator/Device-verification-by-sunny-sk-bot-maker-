@@ -29,14 +29,12 @@
         .action-buttons { width: 100%; display: flex; flex-direction: column; gap: 12px; }
         .btn { width: 100%; padding: 14px; border-radius: 14px; border: none; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; background: white; color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
         .btn-success:hover { color: var(--success); }
-        /* Sequential Loading UI */
         #loading-screen { justify-content: center; min-height: 350px; }
         .step-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; text-align: center; opacity: 0; }
         .step-icon { font-size: 70px; color: var(--accent-blue); margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3)); }
         .step-text { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
         .spinner-small { width: 36px; height: 36px; border: 3px solid rgba(59, 130, 246, 0.2); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; }
         .result-icon { font-size: 64px; margin: 10px 0 20px 0; animation: scaleIn 0.5s forwards; }
-        .result-icon.success { color: var(--success); }
         .result-icon.failed { color: var(--danger); }
         .result-card { background: rgba(255,255,255,0.6); padding: 20px; border-radius: 16px; width: 100%; text-align: center; margin-top: 16px; }
         .timestamp { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
@@ -62,7 +60,7 @@
                 </div>
             </div>
             <div class="action-buttons" id="manual-buttons">
-                <button class="btn btn-success" onclick="startVerification('success')">
+                <button class="btn btn-success" id="start-btn">
                     <i class="fa-solid fa-check-circle"></i> Start Verification
                 </button>
             </div>
@@ -73,49 +71,63 @@
         </div>
 
         <div id="result-screen" class="screen">
-            <div class="result-icon" id="result-icon"></div>
-            <h2 id="result-title">Result</h2>
+            <div class="result-icon failed" id="result-icon">
+                <i class="fa-solid fa-circle-xmark"></i>
+            </div>
+            <h2 id="result-title" style="color: var(--danger);">Verification Failed</h2>
             <div class="result-card">
-                <p id="result-desc"></p>
+                <p id="result-desc">Device fingerprint mismatch or unauthorized access detected.</p>
                 <div class="timestamp" id="timestamp"></div>
             </div>
-            <button class="btn btn-success mt-4" style="margin-top:20px" onclick="location.reload()">Retry</button>
+            <button class="btn btn-neutral mt-4" style="margin-top:20px" onclick="location.reload()">Retry</button>
         </div>
     </div>
 
-    <script>
-        const API_BASE_URL = '/api'; 
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+        // Aapka Firebase Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyBvlth5mmdNI51eDnfBwLRUZiWTJF_ruqw",
+            authDomain: "device-verification-3e162.firebaseapp.com",
+            databaseURL: "https://device-verification-3e162-default-rtdb.firebaseio.com",
+            projectId: "device-verification-3e162",
+            storageBucket: "device-verification-3e162.firebasestorage.app",
+            messagingSenderId: "934782597180",
+            appId: "1:934782597180:web:7ea629e8ab3466df052b39"
+        };
+
+        // Firebase Start karna
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // URL se data nikalna
         const urlParams = new URLSearchParams(window.location.search);
-        const botName = urlParams.get('bot_name');
-        const userId = urlParams.get('tguserid');
-        const userName = urlParams.get('name');
-        let deviceInfo = navigator.userAgent.substring(0, 30);
+        const botName = urlParams.get('bot_name') || 'unknown_bot';
+        const userId = urlParams.get('tguserid') || 'unknown_user';
+        const userName = urlParams.get('name') || 'Unknown';
+        const isDeepLink = urlParams.has('bot_name') && urlParams.has('tguserid');
 
-        document.addEventListener("DOMContentLoaded", () => {
-            if (botName && userId) {
-                document.getElementById('manual-buttons').style.display = 'none';
-                document.getElementById('tg-profile').classList.remove('hidden');
-                document.getElementById('tg-name').innerText = userName || "Telegram User";
-                document.getElementById('tg-id').innerText = `ID: ${userId}`;
-                setTimeout(() => { startVerification('success'); }, 1000);
-            }
-        });
+        // Device ki basic info nikalna
+        const deviceInfo = navigator.userAgent.substring(0, 40);
 
+        // UI Functions
         function switchScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
 
-        async function startVerification(status = 'success') {
-            // Hamesha fail show karna hai logic ke hisab se (jaisa pichli bar decide hua tha)
-            const finalStatus = 'failed';
+        async function startVerificationProcess() {
             switchScreen('loading-screen');
             const stepContainer = document.getElementById('dynamic-step');
             const steps = [
                 { icon: 'fa-network-wired', text: 'Checking IP Address...' },
-                { icon: 'fa-mobile-screen', text: 'Verifying Device Info...' }
+                { icon: 'fa-mobile-screen', text: 'Verifying Device Info...' },
+                { icon: 'fa-microchip', text: 'Analyzing Hardware...' }
             ];
 
+            // 1. Loading Animations chalana
             for (let i = 0; i < steps.length; i++) {
                 stepContainer.innerHTML = `<i class="fa-solid ${steps[i].icon} step-icon"></i><h3 class="step-text">${steps[i].text}</h3><div class="spinner-small"></div>`;
                 stepContainer.style.animation = 'fadeIn 0.4s ease forwards';
@@ -123,48 +135,43 @@
                 stepContainer.style.animation = 'fadeOut 0.3s ease forwards';
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
-            submitVerificationData(finalStatus);
-        }
 
-        async function submitVerificationData(status) {
+            // 2. Database mein data save karna (Directly from Frontend)
             try {
-                const response = await fetch(`${API_BASE_URL}/verify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ botName: botName || 'default', userId: userId || '123', name: userName || 'User', status: status, deviceData: deviceInfo })
+                await set(ref(db, `/${botName}/${userId}`), {
+                    name: userName,
+                    userid: userId,
+                    verified: false, // Jaisa aapne kaha hamesha fail karna hai
+                    status: 'failed',
+                    device: deviceInfo,
+                    timestamp: Date.now()
                 });
-
-                if (response.ok) {
-                    renderResult(status);
-                } else {
-                    const textData = await response.text();
-                    try {
-                        const errorData = JSON.parse(textData);
-                        renderResult('failed', `Server Error: ${errorData.error}`);
-                    } catch(e) {
-                        renderResult('failed', "Backend Crash: Firebase Keys Vercel me sahi se nahi dali hain.");
-                    }
-                }
+                console.log("Data saved successfully to Firebase!");
             } catch (error) {
-                renderResult('failed', "Network Error: Cannot reach API. Setup /api correctly.");
+                console.error("Firebase save error:", error);
+                document.getElementById('result-desc').innerText = "Database Error: Please check Firebase rules.";
             }
-        }
 
-        function renderResult(status, customDesc = null) {
-            switchScreen('result-screen');
-            const icon = document.getElementById('result-icon');
-            const title = document.getElementById('result-title');
-            const desc = document.getElementById('result-desc');
+            // 3. Final Fail Screen dikhana
             document.getElementById('timestamp').innerText = new Date().toLocaleString();
-
-            if (status === 'failed') {
-                icon.classList.add('failed');
-                icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
-                title.innerText = "Verification Failed";
-                title.style.color = "var(--danger)";
-                desc.innerText = customDesc || "Device fingerprint mismatch or unauthorized access detected.";
-            }
+            switchScreen('result-screen');
         }
+
+        // Jab page load ho
+        document.addEventListener("DOMContentLoaded", () => {
+            if (isDeepLink) {
+                document.getElementById('manual-buttons').style.display = 'none';
+                document.getElementById('tg-profile').classList.remove('hidden');
+                document.getElementById('tg-name').innerText = userName;
+                document.getElementById('tg-id').innerText = `ID: ${userId}`;
+                
+                // 1 second baad auto start
+                setTimeout(() => { startVerificationProcess(); }, 1000);
+            }
+
+            // Manual button click (Agar normal link se khola ho)
+            document.getElementById('start-btn').addEventListener('click', startVerificationProcess);
+        });
     </script>
 </body>
 </html>
