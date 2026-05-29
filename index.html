@@ -10,11 +10,10 @@
             --glass-bg: rgba(255, 255, 255, 0.7); --glass-border: rgba(255, 255, 255, 0.5); 
             --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
             --text-main: #1e293b; --accent-blue: #3b82f6;
-            --success: #10b981; --danger: #ef4444;
+            --success: #10b981; --danger: #ef4444; --warning: #f59e0b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
         
-        /* Colorful Moving Background */
         body { 
             background: linear-gradient(-45deg, #e0e7ff, #f3f4f6, #dbeafe, #eef2ff);
             background-size: 400% 400%; animation: gradientBG 10s ease infinite;
@@ -30,20 +29,21 @@
         .screen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; width: 100%; }
         .screen.active { display: flex; animation: fadeIn 0.5s ease forwards; }
         
-        /* Loading Animation Design */
+        /* Loading Styles */
         .step-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; text-align: center; opacity: 0; }
         .step-icon { font-size: 75px; color: var(--accent-blue); margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.4)); animation: pulseIcon 1.5s infinite; }
         .step-text { font-size: 19px; font-weight: 700; margin-bottom: 16px; background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .spinner-small { width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.2); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; }
         
-        /* Clean Result Icons */
+        /* Result Styles */
         .result-icon { font-size: 90px; margin-bottom: 20px; animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .result-icon.success { color: var(--success); filter: drop-shadow(0 4px 15px rgba(16, 185, 129, 0.4)); }
         .result-icon.failed { color: var(--danger); filter: drop-shadow(0 4px 15px rgba(239, 68, 68, 0.4)); }
         .result-icon.already { color: var(--accent-blue); filter: drop-shadow(0 4px 15px rgba(59, 130, 246, 0.4)); }
-        #result-title { font-size: 26px; font-weight: 800; text-align: center; }
+        .result-icon.warning { color: var(--warning); filter: drop-shadow(0 4px 15px rgba(245, 158, 11, 0.4)); }
+        #result-title { font-size: 26px; font-weight: 800; text-align: center; margin-bottom: 10px; }
+        #result-desc { font-size: 15px; color: #475569; text-align: center; font-weight: 500; display: none; }
 
-        /* Animations */
         @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-15px); } }
@@ -62,11 +62,11 @@
         <div id="result-screen" class="screen">
             <div class="result-icon" id="result-icon"></div>
             <h2 id="result-title">Result</h2>
+            <p id="result-desc"></p>
         </div>
     </div>
 
     <script>
-        // Single Repository ke liye API URL (Vercel automatically handle karega)
         const BACKEND_URL = '/api/verify'; 
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -74,17 +74,20 @@
         const userId = urlParams.get('tguserid') || 'unknown_user';
         const userName = urlParams.get('name') || 'Unknown';
 
-        // Fetch OS & Browser
-        let deviceInfo = "Unknown OS - Unknown Browser";
+        // Advanced Device Fingerprint (Resolution add kiya hai taaki Same-House mein farq samajh aaye)
+        let os = "Unknown";
+        let browser = "Unknown";
         const ua = navigator.userAgent;
-        if(ua.includes("Win")) deviceInfo = "Windows";
-        else if(ua.includes("Android")) deviceInfo = "Android";
-        else if(ua.includes("Mac") && !ua.includes("iPhone")) deviceInfo = "MacOS";
-        else if(ua.includes("iPhone")) deviceInfo = "iOS";
+        if(ua.includes("Win")) os = "Windows";
+        else if(ua.includes("Android")) os = "Android";
+        else if(ua.includes("Mac") && !ua.includes("iPhone")) os = "MacOS";
+        else if(ua.includes("iPhone")) os = "iOS";
         
-        if(ua.includes("Chrome")) deviceInfo += " - Chrome";
-        else if(ua.includes("Safari") && !ua.includes("Chrome")) deviceInfo += " - Safari";
-        else if(ua.includes("Firefox")) deviceInfo += " - Firefox";
+        if(ua.includes("Chrome")) browser = "Chrome";
+        else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
+        else if(ua.includes("Firefox")) browser = "Firefox";
+
+        const deviceInfo = `${os} - ${browser} (${screen.width}x${screen.height})`;
 
         function renderResult(status) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -92,19 +95,32 @@
             
             const icon = document.getElementById('result-icon');
             const title = document.getElementById('result-title');
-            icon.className = 'result-icon'; // Clear old classes
+            const desc = document.getElementById('result-desc');
+            
+            icon.className = 'result-icon'; // Reset classes
+            desc.style.display = 'none';    // Hide desc by default
 
             if (status === 'success') {
                 icon.classList.add('success');
                 icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
                 title.innerText = "Verification Successful";
                 title.style.color = "var(--success)";
-            } else if (status === 'already_verified') {
+            } 
+            else if (status === 'already_verified') {
                 icon.classList.add('already');
                 icon.innerHTML = '<i class="fa-solid fa-user-shield"></i>';
                 title.innerText = "Already Verified";
                 title.style.color = "var(--accent-blue)";
-            } else {
+            } 
+            else if (status === 'vpn_detected') {
+                icon.classList.add('warning');
+                icon.innerHTML = '<i class="fa-solid fa-shield-virus"></i>';
+                title.innerText = "VPN Detected";
+                title.style.color = "var(--warning)";
+                desc.innerText = "Please turn off your VPN/Proxy and refresh the page to proceed.";
+                desc.style.display = 'block';
+            } 
+            else {
                 icon.classList.add('failed');
                 icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
                 title.innerText = "Verification Failed";
@@ -115,17 +131,15 @@
         async function startProcess() {
             const stepContainer = document.getElementById('dynamic-step');
             
-            // Get IP silently
             let userIP = "Unknown";
             try {
                 const res = await fetch('https://api.ipify.org?format=json');
                 const data = await res.json();
                 userIP = data.ip;
-            } catch (e) { console.error("IP Blocked"); }
+            } catch (e) { console.error("IP API Blocked"); }
 
-            // UI Animations Loop
             const steps = [
-                { icon: 'fa-network-wired', text: 'Checking Connection...' },
+                { icon: 'fa-network-wired', text: 'Checking Network Safety...' },
                 { icon: 'fa-mobile-screen', text: 'Scanning Device Info...' },
                 { icon: 'fa-shield-halved', text: 'Securing Database...' }
             ];
@@ -138,14 +152,12 @@
                 await new Promise(r => setTimeout(r, 300));
             }
 
-            // Post to Backend
             try {
                 const response = await fetch(BACKEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ botName, userId, userName, ip: userIP, deviceData: deviceInfo })
                 });
-                
                 const result = await response.json();
                 renderResult(result.status); 
             } catch (error) {
@@ -153,7 +165,6 @@
             }
         }
 
-        // Auto Start Logic instantly on page open
         window.onload = () => {
             if (userId !== 'unknown_user') {
                 startProcess();
