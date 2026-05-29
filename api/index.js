@@ -21,29 +21,27 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
 app.post('/api/verify', async (req, res) => {
-    const { botName, userId, userName, ip, deviceData } = req.body;
+    // Ab frontend se secretId bhi aa raha hai
+    const { botName, userId, userName, ip, deviceData, secretId } = req.body;
 
     if (!botName || !userId) {
         return res.status(400).json({ error: 'Missing Data' });
     }
 
-    // --- STEP 1: VPN & PROXY DETECTION (Anti-VPN System) ---
+    // --- VPN & PROXY DETECTION ---
     if (ip && ip !== "Unknown") {
         try {
-            // Yeh API free mein VPN/Proxy/Cloud Hosting detect karti hai
             const vpnRes = await fetch(`http://ip-api.com/json/${ip}?fields=proxy,hosting`);
             const vpnData = await vpnRes.json();
-            
             if (vpnData.proxy || vpnData.hosting) {
-                // Agar VPN hai toh Database check karne ki zaroorat hi nahi
                 return res.json({ status: 'vpn_detected' });
             }
         } catch (e) {
-            console.error("VPN Check Skipped (API Error)", e);
+            console.error("VPN Check Error", e);
         }
     }
 
-    // --- STEP 2: DATABASE CHECK ---
+    // --- DATABASE STRICT SECURITY CHECK ---
     try {
         const dbRef = ref(db);
         const botRef = child(dbRef, botName);
@@ -52,27 +50,30 @@ app.post('/api/verify', async (req, res) => {
         if (snapshot.exists()) {
             const allUsers = snapshot.val();
             
-            // Agar khud pehle se verify hai
+            // 1. Agar user khud pehle verify ho chuka hai (Success)
             if (allUsers[userId] && allUsers[userId].status === 'success') {
                 return res.json({ status: 'already_verified' });
             }
 
-            // Multi-Account Check
+            // 2. Loop through all verified users to catch Frauds
             for (const [existingUserId, userData] of Object.entries(allUsers)) {
+                
+                // Hum sirf unhe check karenge jo pehle Success hue the aur jinki ID alag hai
                 if (existingUserId !== userId && userData.status === 'success') {
                     
-                    // 👉 IP check HATA DIYA (Taaki same ghar ke log verify kar sakein)
-                    // Ab sirf Exact Physical Device check hoga (Device + Screen Resolution)
-                    if (userData.device === deviceData) {
+                    // 👉 BLOCK CONDITION: Agar IP same hai YA Secret ID same hai
+                    if (userData.ip === ip || userData.secretId === secretId) {
                         
+                        // Fake Verification pakdi gayi, Database mein Fail mark karo
                         await set(ref(db, `/${botName}/${userId}`), {
                             name: userName,
                             userid: userId,
                             verified: false,
                             status: 'failed',
-                            reason: 'duplicate_physical_device',
+                            reason: userData.ip === ip ? 'duplicate_ip_detected' : 'duplicate_secret_id_detected',
                             ip: ip,
                             device: deviceData,
+                            secretId: secretId, // Record secret id to analyze frauds later
                             timestamp: Date.now()
                         });
                         return res.json({ status: 'failed' });
@@ -81,7 +82,8 @@ app.post('/api/verify', async (req, res) => {
             }
         }
 
-        // --- STEP 3: SUCCESS SAVE ---
+        // --- SUCCESS SAVE ---
+        // Sab clean hai, isliye database mein IP aur Secret ID dono save karo future checking ke liye
         await set(ref(db, `/${botName}/${userId}`), {
             name: userName,
             userid: userId,
@@ -89,6 +91,7 @@ app.post('/api/verify', async (req, res) => {
             status: 'success',
             ip: ip,
             device: deviceData,
+            secretId: secretId,
             timestamp: Date.now()
         });
         
