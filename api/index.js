@@ -7,7 +7,7 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
-// Aapka Secure Firebase Config
+// Aapka Secure Firebase Config (Hidden in Backend)
 const firebaseConfig = {
     apiKey: "AIzaSyBvlth5mmdNI51eDnfBwLRUZiWTJF_ruqw",
     authDomain: "device-verification-3e162.firebaseapp.com",
@@ -22,7 +22,7 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
-app.post('/verify', async (req, res) => {
+app.post('/api/verify', async (req, res) => {
     const { botName, userId, userName, ip, deviceData } = req.body;
 
     if (!botName || !userId) {
@@ -37,23 +37,24 @@ app.post('/verify', async (req, res) => {
         if (snapshot.exists()) {
             const allUsers = snapshot.val();
             
-            // 1. Agar user pehle se success hai
+            // 1. Agar user pehle se verify ho chuka hai
             if (allUsers[userId] && allUsers[userId].status === 'success') {
                 return res.json({ status: 'already_verified' });
             }
 
-            // 2. Check ki kya kisi aur ID ne same IP ya Device use kiya hai?
+            // 2. Multi-Account Check (IP aur Device Block)
             for (const [existingUserId, userData] of Object.entries(allUsers)) {
                 if (existingUserId !== userId && userData.status === 'success') {
+                    // Agar dusre success user ka IP ya Device aapse match karta hai
                     if (userData.ip === ip || userData.device === deviceData) {
                         
-                        // Fake Verify Save karo (status: failed)
+                        // Database mein failed status save karo
                         await set(ref(db, `/${botName}/${userId}`), {
                             name: userName,
                             userid: userId,
                             verified: false,
                             status: 'failed',
-                            reason: 'duplicate_ip_or_device',
+                            reason: 'duplicate_ip_or_device_used',
                             ip: ip,
                             device: deviceData,
                             timestamp: Date.now()
@@ -64,7 +65,7 @@ app.post('/verify', async (req, res) => {
             }
         }
 
-        // 3. Sab theek hai, Naya User Verify karo
+        // 3. Agar IP/Device naya hai, toh Success save karo
         await set(ref(db, `/${botName}/${userId}`), {
             name: userName,
             userid: userId,
@@ -83,5 +84,5 @@ app.post('/verify', async (req, res) => {
     }
 });
 
-// Vercel Serverless Function export
+// Vercel Serverless Setup (app.listen() nahi aayega)
 module.exports = app;
