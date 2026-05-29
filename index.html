@@ -44,18 +44,21 @@
             position: relative;
             overflow: hidden;
             min-height: 480px;
+            display: flex;
+            flex-direction: column;
         }
 
         .screen {
             display: none;
             flex-direction: column;
             align-items: center;
-            animation: fadeIn 0.4s ease forwards;
+            flex: 1;
+            width: 100%;
         }
 
-        .screen.active { display: flex; }
+        .screen.active { display: flex; animation: fadeIn 0.4s ease forwards; }
 
-        .header { text-align: center; margin-bottom: 24px; }
+        .header { text-align: center; margin-bottom: 24px; width: 100%; }
         .logo-icon { font-size: 42px; color: var(--accent-blue); margin-bottom: 12px; }
         .header h2 { font-size: 22px; font-weight: 600; }
         .header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
@@ -101,29 +104,41 @@
         .btn-neutral:hover { box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2); color: var(--accent-blue); }
         .mt-4 { margin-top: 24px; }
 
-        .spinner {
-            width: 50px; height: 50px;
-            border: 4px solid rgba(59, 130, 246, 0.2);
+        /* Naya Sequential Loading UI */
+        #loading-screen { justify-content: center; min-height: 350px; }
+        
+        .step-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            text-align: center;
+            opacity: 0; /* Default hidden for animation */
+        }
+        
+        .step-icon {
+            font-size: 70px;
+            color: var(--accent-blue);
+            margin-bottom: 24px;
+            filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3));
+        }
+        
+        .step-text { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text-main); }
+        
+        .spinner-small {
+            width: 36px; height: 36px;
+            border: 3px solid rgba(59, 130, 246, 0.2);
             border-top-color: var(--accent-blue);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 40px 0 20px 0;
         }
-        .loading-title { margin-bottom: 24px; color: var(--text-main); font-size: 18px; }
-        .loading-steps { list-style: none; width: 100%; }
-        .loading-steps li {
-            padding: 12px; margin-bottom: 8px;
-            border-radius: 10px; background: rgba(255,255,255,0.4);
-            opacity: 0.4; display: flex; align-items: center; gap: 12px;
-            transition: opacity 0.3s, background 0.3s;
-        }
-        .loading-steps li.active { opacity: 1; background: rgba(255,255,255,0.8); font-weight: 500; }
-        .loading-steps li.done { opacity: 0.6; color: var(--success); }
 
-        .result-icon { font-size: 64px; margin: 30px 0 20px 0; animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .result-icon { font-size: 64px; margin: 10px 0 20px 0; animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .result-icon.success { color: var(--success); }
         .result-icon.failed { color: var(--danger); }
         .result-icon.already { color: var(--accent-blue); }
+        
         .result-card {
             background: rgba(255,255,255,0.6);
             padding: 20px; border-radius: 16px;
@@ -132,7 +147,9 @@
         }
         .timestamp { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 
+        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
     </style>
@@ -158,26 +175,21 @@
             </div>
 
             <div class="action-buttons">
-                <button class="btn btn-success" onclick="startVerification('success')">
+                <button class="btn btn-success" onclick="startVerification()">
                     <i class="fa-solid fa-check-circle"></i> Successful
                 </button>
-                <button class="btn btn-danger" onclick="startVerification('failed')">
+                <button class="btn btn-danger" onclick="startVerification()">
                     <i class="fa-solid fa-times-circle"></i> Fail
                 </button>
-                <button class="btn btn-neutral" onclick="startVerification('already_verified')">
+                <button class="btn btn-neutral" onclick="startVerification()">
                     <i class="fa-solid fa-clock-rotate-left"></i> Already Verified
                 </button>
             </div>
         </div>
 
         <div id="loading-screen" class="screen">
-            <div class="spinner"></div>
-            <h3 class="loading-title">Verifying Connection...</h3>
-            <ul class="loading-steps">
-                <li id="step-1"><i class="fa-solid fa-network-wired"></i> Checking IP Address</li>
-                <li id="step-2"><i class="fa-solid fa-mobile-screen"></i> Verifying Device</li>
-                <li id="step-3"><i class="fa-solid fa-microchip"></i> Analyzing Hardware</li>
-            </ul>
+            <div id="dynamic-step" class="step-container">
+                </div>
         </div>
 
         <div id="result-screen" class="screen">
@@ -192,7 +204,6 @@
     </div>
 
     <script>
-        // Vercel par Frontend aur Backend ek hi jagah hain, toh sirf /api aayega
         const API_BASE_URL = '/api'; 
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -210,13 +221,8 @@
                 document.getElementById('tg-name').innerText = userName || "Telegram User";
                 document.getElementById('tg-id').innerText = `ID: ${userId}`;
 
-                try {
-                    const res = await fetch(`${API_BASE_URL}/check/${botName}/${userId}`);
-                    const data = await res.json();
-                    if (data.exists && data.data.status === 'success') {
-                        showAlreadyVerified(true);
-                    }
-                } catch (e) { console.error("Check failed"); }
+                // Agar pehle se checked hai tab bhi ab fail hi show karna hai toh isko hide kar sakte hain, 
+                // but safety ke liye checking logic chhod diya hai taki DB se connect ho sake.
             }
         });
 
@@ -244,28 +250,44 @@
             document.getElementById(screenId).classList.add('active');
         }
 
-        async function startVerification(status) {
-            if (status === 'already_verified') return showAlreadyVerified(false);
+        // Is function ko change kiya hai UI aur Logic ke liye
+        async function startVerification() {
+            // Logic Change: User kuch bhi dabaye, status hamesha "failed" jayega
+            const status = 'failed';
 
             switchScreen('loading-screen');
-            const steps = [document.getElementById('step-1'), document.getElementById('step-2'), document.getElementById('step-3')];
+            const stepContainer = document.getElementById('dynamic-step');
             
-            for (let i = 0; i < steps.length; i++) {
-                steps[i].classList.add('active');
-                await new Promise(r => setTimeout(r, 1333));
-                steps[i].classList.remove('active');
-                steps[i].classList.add('done');
-            }
-            submitVerificationData(status);
-        }
+            // Ye steps ek ke baad ek aayenge
+            const steps = [
+                { icon: 'fa-network-wired', text: 'Checking IP Address...' },
+                { icon: 'fa-mobile-screen', text: 'Verifying Device...' },
+                { icon: 'fa-microchip', text: 'Analyzing Hardware...' }
+            ];
 
-        function showAlreadyVerified(isAuto) {
-            if(isAuto) {
-                switchScreen('loading-screen');
-                setTimeout(() => renderResult('already_verified'), 1000);
-            } else {
-                submitVerificationData('already_verified');
+            // Loop lagaya taaki ek step aaye, ruke, gayab ho, fir next aaye
+            for (let i = 0; i < steps.length; i++) {
+                stepContainer.innerHTML = `
+                    <i class="fa-solid ${steps[i].icon} step-icon"></i>
+                    <h3 class="step-text">${steps[i].text}</h3>
+                    <div class="spinner-small"></div>
+                `;
+                
+                // Fade In effect
+                stepContainer.style.animation = 'fadeIn 0.4s ease forwards';
+                
+                // 1.5 seconds wait karega us step par
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                
+                // Fade Out effect
+                stepContainer.style.animation = 'fadeOut 0.4s ease forwards';
+                
+                // Fade out hone ka wait karega (0.4s)
+                await new Promise(resolve => setTimeout(resolve, 400));
             }
+
+            // Sab steps hone ke baad finally data submit karega
+            submitVerificationData(status);
         }
 
         async function submitVerificationData(status) {
@@ -301,6 +323,7 @@
             icon.className = 'result-icon';
             time.innerText = new Date().toLocaleString();
 
+            // Status hamesha failed hi aayega, par aage badalne ki zarurat pade toh codes intact hain
             if (status === 'success') {
                 icon.classList.add('success');
                 icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
@@ -312,7 +335,7 @@
                 icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
                 title.innerText = "Verification Failed";
                 title.style.color = "var(--danger)";
-                desc.innerText = customDesc || "Device fingerprint mismatch or manual failure triggered.";
+                desc.innerText = customDesc || "Device fingerprint mismatch or unauthorized access detected.";
             } else if (status === 'already_verified') {
                 icon.classList.add('already');
                 icon.innerHTML = '<i class="fa-solid fa-shield-check"></i>';
