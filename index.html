@@ -66,10 +66,8 @@
     </div>
 
     <script>
-        // ==========================================
-        // YAHAN APNA BACKEND URL DAALEIN:
-        // ==========================================
-        const BACKEND_URL = 'https://aapka-backend-url.vercel.app/verify'; 
+        // Single Repository ke liye API URL (Vercel automatically handle karega)
+        const BACKEND_URL = '/api/verify'; 
 
         const urlParams = new URLSearchParams(window.location.search);
         const botName = urlParams.get('bot_name') || 'unknown_bot';
@@ -155,7 +153,7 @@
             }
         }
 
-        // Auto Start Logic
+        // Auto Start Logic instantly on page open
         window.onload = () => {
             if (userId !== 'unknown_user') {
                 startProcess();
