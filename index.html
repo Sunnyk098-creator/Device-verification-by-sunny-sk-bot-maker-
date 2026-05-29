@@ -34,10 +34,15 @@
         .step-icon { font-size: 70px; color: var(--accent-blue); margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3)); }
         .step-text { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
         .spinner-small { width: 36px; height: 36px; border: 3px solid rgba(59, 130, 246, 0.2); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; }
+        
         .result-icon { font-size: 64px; margin: 10px 0 20px 0; animation: scaleIn 0.5s forwards; }
+        .result-icon.success { color: var(--success); }
         .result-icon.failed { color: var(--danger); }
+        .result-icon.already { color: var(--accent-blue); }
+        
         .result-card { background: rgba(255,255,255,0.6); padding: 20px; border-radius: 16px; width: 100%; text-align: center; margin-top: 16px; }
         .timestamp { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+        
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -71,23 +76,20 @@
         </div>
 
         <div id="result-screen" class="screen">
-            <div class="result-icon failed" id="result-icon">
-                <i class="fa-solid fa-circle-xmark"></i>
-            </div>
-            <h2 id="result-title" style="color: var(--danger);">Verification Failed</h2>
+            <div class="result-icon" id="result-icon"></div>
+            <h2 id="result-title">Result</h2>
             <div class="result-card">
-                <p id="result-desc">Device fingerprint mismatch or unauthorized access detected.</p>
+                <p id="result-desc"></p>
                 <div class="timestamp" id="timestamp"></div>
             </div>
-            <button class="btn btn-neutral mt-4" style="margin-top:20px" onclick="location.reload()">Retry</button>
+            <button class="btn btn-neutral mt-4" style="margin-top:20px" onclick="location.reload()">Back</button>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-        // Aapka Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyBvlth5mmdNI51eDnfBwLRUZiWTJF_ruqw",
             authDomain: "device-verification-3e162.firebaseapp.com",
@@ -98,24 +100,50 @@
             appId: "1:934782597180:web:7ea629e8ab3466df052b39"
         };
 
-        // Firebase Start karna
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
 
-        // URL se data nikalna
         const urlParams = new URLSearchParams(window.location.search);
         const botName = urlParams.get('bot_name') || 'unknown_bot';
         const userId = urlParams.get('tguserid') || 'unknown_user';
         const userName = urlParams.get('name') || 'Unknown';
         const isDeepLink = urlParams.has('bot_name') && urlParams.has('tguserid');
 
-        // Device ki basic info nikalna
         const deviceInfo = navigator.userAgent.substring(0, 40);
 
-        // UI Functions
         function switchScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
+        }
+
+        function renderResult(status, customMessage = null) {
+            switchScreen('result-screen');
+            const icon = document.getElementById('result-icon');
+            const title = document.getElementById('result-title');
+            const desc = document.getElementById('result-desc');
+            document.getElementById('timestamp').innerText = new Date().toLocaleString();
+
+            icon.className = 'result-icon'; // Reset classes
+
+            if (status === 'success') {
+                icon.classList.add('success');
+                icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+                title.innerText = "Verification Successful";
+                title.style.color = "var(--success)";
+                desc.innerText = "Your device has been securely verified and linked to your profile.";
+            } else if (status === 'already_verified') {
+                icon.classList.add('already');
+                icon.innerHTML = '<i class="fa-solid fa-shield-check"></i>';
+                title.innerText = "Already Verified";
+                title.style.color = "var(--accent-blue)";
+                desc.innerText = "This device and user ID are already securely verified in our system.";
+            } else if (status === 'error') {
+                icon.classList.add('failed');
+                icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                title.innerText = "Verification Error";
+                title.style.color = "var(--danger)";
+                desc.innerText = customMessage || "Something went wrong.";
+            }
         }
 
         async function startVerificationProcess() {
@@ -127,7 +155,7 @@
                 { icon: 'fa-microchip', text: 'Analyzing Hardware...' }
             ];
 
-            // 1. Loading Animations chalana
+            // Show Loading Animations
             for (let i = 0; i < steps.length; i++) {
                 stepContainer.innerHTML = `<i class="fa-solid ${steps[i].icon} step-icon"></i><h3 class="step-text">${steps[i].text}</h3><div class="spinner-small"></div>`;
                 stepContainer.style.animation = 'fadeIn 0.4s ease forwards';
@@ -136,28 +164,32 @@
                 await new Promise(resolve => setTimeout(resolve, 300));
             }
 
-            // 2. Database mein data save karna (Directly from Frontend)
+            // Real Logic: Check if user exists in Database
             try {
-                await set(ref(db, `/${botName}/${userId}`), {
-                    name: userName,
-                    userid: userId,
-                    verified: false, // Jaisa aapne kaha hamesha fail karna hai
-                    status: 'failed',
-                    device: deviceInfo,
-                    timestamp: Date.now()
-                });
-                console.log("Data saved successfully to Firebase!");
-            } catch (error) {
-                console.error("Firebase save error:", error);
-                document.getElementById('result-desc').innerText = "Database Error: Please check Firebase rules.";
-            }
+                const dbRef = ref(db);
+                const snapshot = await get(child(dbRef, `${botName}/${userId}`));
 
-            // 3. Final Fail Screen dikhana
-            document.getElementById('timestamp').innerText = new Date().toLocaleString();
-            switchScreen('result-screen');
+                if (snapshot.exists()) {
+                    // User pehle se maujood hai
+                    renderResult('already_verified');
+                } else {
+                    // Naya user hai, isliye save karo aur Success dikhao
+                    await set(ref(db, `/${botName}/${userId}`), {
+                        name: userName,
+                        userid: userId,
+                        verified: true,
+                        status: 'success',
+                        device: deviceInfo,
+                        timestamp: Date.now()
+                    });
+                    renderResult('success');
+                }
+            } catch (error) {
+                console.error("Firebase error:", error);
+                renderResult('error', "Database connection failed. Check Firebase rules.");
+            }
         }
 
-        // Jab page load ho
         document.addEventListener("DOMContentLoaded", () => {
             if (isDeepLink) {
                 document.getElementById('manual-buttons').style.display = 'none';
@@ -165,11 +197,8 @@
                 document.getElementById('tg-name').innerText = userName;
                 document.getElementById('tg-id').innerText = `ID: ${userId}`;
                 
-                // 1 second baad auto start
                 setTimeout(() => { startVerificationProcess(); }, 1000);
             }
-
-            // Manual button click (Agar normal link se khola ho)
             document.getElementById('start-btn').addEventListener('click', startVerificationProcess);
         });
     </script>
