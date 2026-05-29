@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Verification</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --glass-bg: rgba(255, 255, 255, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --accent-blue: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --neutral: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+        body {
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3f4f6 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-main);
+            padding: 20px;
+        }
+
+        .glass-container {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: var(--glass-shadow);
+            width: 100%;
+            max-width: 400px;
+            padding: 32px 24px;
+            position: relative;
+            overflow: hidden;
+            min-height: 480px;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .screen.active { display: flex; }
+
+        .header { text-align: center; margin-bottom: 24px; }
+        .logo-icon { font-size: 42px; color: var(--accent-blue); margin-bottom: 12px; }
+        .header h2 { font-size: 22px; font-weight: 600; }
+        .header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+
+        .profile-card {
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 16px;
+            padding: 16px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.8);
+        }
+        .profile-card.hidden { display: none; }
+        .avatar {
+            width: 48px; height: 48px;
+            background: var(--accent-blue); color: white;
+            border-radius: 50%; display: flex;
+            align-items: center; justify-content: center;
+            font-size: 20px;
+        }
+        .profile-info h3 { font-size: 16px; margin-bottom: 4px; }
+        .id-row { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+        .copy-btn { cursor: pointer; transition: color 0.2s; }
+        .copy-btn:hover { color: var(--accent-blue); }
+
+        .action-buttons { width: 100%; display: flex; flex-direction: column; gap: 12px; }
+        .btn {
+            width: 100%; padding: 14px;
+            border-radius: 14px; border: none;
+            font-size: 15px; font-weight: 600;
+            cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            gap: 10px; transition: transform 0.1s, box-shadow 0.2s;
+            background: white; color: var(--text-main);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-success:hover { box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); color: var(--success); }
+        .btn-danger:hover { box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .btn-neutral:hover { box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2); color: var(--accent-blue); }
+        .mt-4 { margin-top: 24px; }
+
+        .spinner {
+            width: 50px; height: 50px;
+            border: 4px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 40px 0 20px 0;
+        }
+        .loading-title { margin-bottom: 24px; color: var(--text-main); font-size: 18px; }
+        .loading-steps { list-style: none; width: 100%; }
+        .loading-steps li {
+            padding: 12px; margin-bottom: 8px;
+            border-radius: 10px; background: rgba(255,255,255,0.4);
+            opacity: 0.4; display: flex; align-items: center; gap: 12px;
+            transition: opacity 0.3s, background 0.3s;
+        }
+        .loading-steps li.active { opacity: 1; background: rgba(255,255,255,0.8); font-weight: 500; }
+        .loading-steps li.done { opacity: 0.6; color: var(--success); }
+
+        .result-icon { font-size: 64px; margin: 30px 0 20px 0; animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .result-icon.success { color: var(--success); }
+        .result-icon.failed { color: var(--danger); }
+        .result-icon.already { color: var(--accent-blue); }
+        .result-card {
+            background: rgba(255,255,255,0.6);
+            padding: 20px; border-radius: 16px;
+            width: 100%; text-align: center;
+            margin-top: 16px;
+        }
+        .timestamp { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes scaleIn { from { transform: scale(0); } to { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div class="glass-container">
+        <div id="home-screen" class="screen active">
+            <div class="header">
+                <i class="fa-solid fa-shield-halved logo-icon"></i>
+                <h2>Device Verification</h2>
+                <p>Select verification status</p>
+            </div>
+
+            <div id="tg-profile" class="profile-card hidden">
+                <div class="avatar"><i class="fa-solid fa-user"></i></div>
+                <div class="profile-info">
+                    <h3 id="tg-name">Loading...</h3>
+                    <div class="id-row">
+                        <span id="tg-id">ID: </span>
+                        <i class="fa-regular fa-copy copy-btn" onclick="copyId()"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="startVerification('success')">
+                    <i class="fa-solid fa-check-circle"></i> Successful
+                </button>
+                <button class="btn btn-danger" onclick="startVerification('failed')">
+                    <i class="fa-solid fa-times-circle"></i> Fail
+                </button>
+                <button class="btn btn-neutral" onclick="startVerification('already_verified')">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Already Verified
+                </button>
+            </div>
+        </div>
+
+        <div id="loading-screen" class="screen">
+            <div class="spinner"></div>
+            <h3 class="loading-title">Verifying Connection...</h3>
+            <ul class="loading-steps">
+                <li id="step-1"><i class="fa-solid fa-network-wired"></i> Checking IP Address</li>
+                <li id="step-2"><i class="fa-solid fa-mobile-screen"></i> Verifying Device</li>
+                <li id="step-3"><i class="fa-solid fa-microchip"></i> Analyzing Hardware</li>
+            </ul>
+        </div>
+
+        <div id="result-screen" class="screen">
+            <div class="result-icon" id="result-icon"></div>
+            <h2 id="result-title">Result</h2>
+            <div class="result-card">
+                <p id="result-desc"></p>
+                <div class="timestamp" id="timestamp"></div>
+            </div>
+            <button class="btn btn-neutral mt-4" onclick="location.reload()">Back</button>
+        </div>
+    </div>
+
+    <script>
+        // Vercel par Frontend aur Backend ek hi jagah hain, toh sirf /api aayega
+        const API_BASE_URL = '/api'; 
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const botName = urlParams.get('bot_name');
+        const userId = urlParams.get('tguserid');
+        const userName = urlParams.get('name');
+
+        let deviceInfo = "";
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            collectDeviceInfo();
+
+            if (botName && userId) {
+                document.getElementById('tg-profile').classList.remove('hidden');
+                document.getElementById('tg-name').innerText = userName || "Telegram User";
+                document.getElementById('tg-id').innerText = `ID: ${userId}`;
+
+                try {
+                    const res = await fetch(`${API_BASE_URL}/check/${botName}/${userId}`);
+                    const data = await res.json();
+                    if (data.exists && data.data.status === 'success') {
+                        showAlreadyVerified(true);
+                    }
+                } catch (e) { console.error("Check failed"); }
+            }
+        });
+
+        function collectDeviceInfo() {
+            const ua = navigator.userAgent;
+            let browser = "Unknown", os = "Unknown";
+            if (ua.includes("Firefox")) browser = "Firefox";
+            else if (ua.includes("Chrome")) browser = "Chrome";
+            else if (ua.includes("Safari")) browser = "Safari";
+
+            if (ua.includes("Win")) os = "Windows";
+            else if (ua.includes("Mac")) os = "MacOS";
+            else if (ua.includes("Android")) os = "Android";
+            else if (ua.includes("like Mac")) os = "iOS";
+
+            deviceInfo = `${os} - ${browser}`;
+        }
+
+        function copyId() {
+            if(userId) { navigator.clipboard.writeText(userId); alert("User ID copied!"); }
+        }
+
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        async function startVerification(status) {
+            if (status === 'already_verified') return showAlreadyVerified(false);
+
+            switchScreen('loading-screen');
+            const steps = [document.getElementById('step-1'), document.getElementById('step-2'), document.getElementById('step-3')];
+            
+            for (let i = 0; i < steps.length; i++) {
+                steps[i].classList.add('active');
+                await new Promise(r => setTimeout(r, 1333));
+                steps[i].classList.remove('active');
+                steps[i].classList.add('done');
+            }
+            submitVerificationData(status);
+        }
+
+        function showAlreadyVerified(isAuto) {
+            if(isAuto) {
+                switchScreen('loading-screen');
+                setTimeout(() => renderResult('already_verified'), 1000);
+            } else {
+                submitVerificationData('already_verified');
+            }
+        }
+
+        async function submitVerificationData(status) {
+            try {
+                const payload = {
+                    botName: botName || 'default_bot',
+                    userId: userId || 'anonymous',
+                    name: userName || 'Unknown',
+                    status: status,
+                    deviceData: deviceInfo
+                };
+
+                const response = await fetch(`${API_BASE_URL}/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) renderResult(status);
+                else renderResult('failed', "Server rejected verification.");
+            } catch (error) {
+                renderResult('failed', "Connection error.");
+            }
+        }
+
+        function renderResult(status, customDesc = null) {
+            switchScreen('result-screen');
+            const icon = document.getElementById('result-icon');
+            const title = document.getElementById('result-title');
+            const desc = document.getElementById('result-desc');
+            const time = document.getElementById('timestamp');
+
+            icon.className = 'result-icon';
+            time.innerText = new Date().toLocaleString();
+
+            if (status === 'success') {
+                icon.classList.add('success');
+                icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+                title.innerText = "Verification Successful";
+                title.style.color = "var(--success)";
+                desc.innerText = "Your device has been securely verified and linked to your profile.";
+            } else if (status === 'failed') {
+                icon.classList.add('failed');
+                icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                title.innerText = "Verification Failed";
+                title.style.color = "var(--danger)";
+                desc.innerText = customDesc || "Device fingerprint mismatch or manual failure triggered.";
+            } else if (status === 'already_verified') {
+                icon.classList.add('already');
+                icon.innerHTML = '<i class="fa-solid fa-shield-check"></i>';
+                title.innerText = "Already Verified";
+                title.style.color = "var(--accent-blue)";
+                desc.innerText = "This device and user ID are already securely verified in our system.";
+            }
+        }
+    </script>
+</body>
+</html>
