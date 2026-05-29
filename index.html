@@ -104,33 +104,20 @@
         .btn-neutral:hover { box-shadow: 0 4px 12px rgba(148, 163, 184, 0.2); color: var(--accent-blue); }
         .mt-4 { margin-top: 24px; }
 
-        /* Naya Sequential Loading UI */
+        /* Sequential Loading UI */
         #loading-screen { justify-content: center; min-height: 350px; }
-        
         .step-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            text-align: center;
-            opacity: 0; /* Default hidden for animation */
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; width: 100%; text-align: center; opacity: 0;
         }
-        
         .step-icon {
-            font-size: 70px;
-            color: var(--accent-blue);
-            margin-bottom: 24px;
-            filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3));
+            font-size: 70px; color: var(--accent-blue);
+            margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3));
         }
-        
         .step-text { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text-main); }
-        
         .spinner-small {
-            width: 36px; height: 36px;
-            border: 3px solid rgba(59, 130, 246, 0.2);
-            border-top-color: var(--accent-blue);
-            border-radius: 50%;
+            width: 36px; height: 36px; border: 3px solid rgba(59, 130, 246, 0.2);
+            border-top-color: var(--accent-blue); border-radius: 50%;
             animation: spin 1s linear infinite;
         }
 
@@ -140,14 +127,11 @@
         .result-icon.already { color: var(--accent-blue); }
         
         .result-card {
-            background: rgba(255,255,255,0.6);
-            padding: 20px; border-radius: 16px;
-            width: 100%; text-align: center;
-            margin-top: 16px;
+            background: rgba(255,255,255,0.6); padding: 20px; border-radius: 16px;
+            width: 100%; text-align: center; margin-top: 16px;
         }
         .timestamp { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
 
-        /* Animations */
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -160,7 +144,7 @@
             <div class="header">
                 <i class="fa-solid fa-shield-halved logo-icon"></i>
                 <h2>Device Verification</h2>
-                <p>Select verification status</p>
+                <p>Initializing security checks...</p>
             </div>
 
             <div id="tg-profile" class="profile-card hidden">
@@ -174,15 +158,9 @@
                 </div>
             </div>
 
-            <div class="action-buttons">
-                <button class="btn btn-success" onclick="startVerification()">
-                    <i class="fa-solid fa-check-circle"></i> Successful
-                </button>
-                <button class="btn btn-danger" onclick="startVerification()">
-                    <i class="fa-solid fa-times-circle"></i> Fail
-                </button>
-                <button class="btn btn-neutral" onclick="startVerification()">
-                    <i class="fa-solid fa-clock-rotate-left"></i> Already Verified
+            <div class="action-buttons" id="manual-buttons">
+                <button class="btn btn-success" onclick="startVerification('success')">
+                    <i class="fa-solid fa-check-circle"></i> Start Manual Verification
                 </button>
             </div>
         </div>
@@ -205,7 +183,6 @@
 
     <script>
         const API_BASE_URL = '/api'; 
-
         const urlParams = new URLSearchParams(window.location.search);
         const botName = urlParams.get('bot_name');
         const userId = urlParams.get('tguserid');
@@ -216,13 +193,21 @@
         document.addEventListener("DOMContentLoaded", async () => {
             collectDeviceInfo();
 
+            // Agar user Telegram Link se aaya hai (URL me details hain)
             if (botName && userId) {
+                // 1. Buttons ko chhupa do
+                document.getElementById('manual-buttons').style.display = 'none';
+                
+                // 2. User ki profile dikhao
                 document.getElementById('tg-profile').classList.remove('hidden');
                 document.getElementById('tg-name').innerText = userName || "Telegram User";
                 document.getElementById('tg-id').innerText = `ID: ${userId}`;
 
-                // Agar pehle se checked hai tab bhi ab fail hi show karna hai toh isko hide kar sakte hain, 
-                // but safety ke liye checking logic chhod diya hai taki DB se connect ho sake.
+                // 3. 1 second ka delay dekar apne aap Real Verification chalu kardo
+                setTimeout(() => {
+                    // Yahan par hum 'success' bhej rahe hain taaki IP, Device wagera Database me save ho
+                    startVerification('success'); 
+                }, 1000);
             }
         });
 
@@ -250,43 +235,28 @@
             document.getElementById(screenId).classList.add('active');
         }
 
-        // Is function ko change kiya hai UI aur Logic ke liye
-        async function startVerification() {
-            // Logic Change: User kuch bhi dabaye, status hamesha "failed" jayega
-            const status = 'failed';
-
+        async function startVerification(status = 'success') {
             switchScreen('loading-screen');
             const stepContainer = document.getElementById('dynamic-step');
             
-            // Ye steps ek ke baad ek aayenge
             const steps = [
                 { icon: 'fa-network-wired', text: 'Checking IP Address...' },
-                { icon: 'fa-mobile-screen', text: 'Verifying Device...' },
+                { icon: 'fa-mobile-screen', text: 'Verifying Device Info...' },
                 { icon: 'fa-microchip', text: 'Analyzing Hardware...' }
             ];
 
-            // Loop lagaya taaki ek step aaye, ruke, gayab ho, fir next aaye
             for (let i = 0; i < steps.length; i++) {
                 stepContainer.innerHTML = `
                     <i class="fa-solid ${steps[i].icon} step-icon"></i>
                     <h3 class="step-text">${steps[i].text}</h3>
                     <div class="spinner-small"></div>
                 `;
-                
-                // Fade In effect
                 stepContainer.style.animation = 'fadeIn 0.4s ease forwards';
-                
-                // 1.5 seconds wait karega us step par
                 await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Fade Out effect
                 stepContainer.style.animation = 'fadeOut 0.4s ease forwards';
-                
-                // Fade out hone ka wait karega (0.4s)
                 await new Promise(resolve => setTimeout(resolve, 400));
             }
 
-            // Sab steps hone ke baad finally data submit karega
             submitVerificationData(status);
         }
 
@@ -306,10 +276,17 @@
                     body: JSON.stringify(payload)
                 });
 
-                if (response.ok) renderResult(status);
-                else renderResult('failed', "Server rejected verification.");
+                if (response.ok) {
+                    renderResult(status);
+                } else {
+                    // Agar API fail hui, toh Backend jo error dega, woh screen par print hoga
+                    const errorData = await response.json();
+                    console.error("Backend Error Detail:", errorData);
+                    renderResult('failed', `Backend Error: ${errorData.error || 'Check Firebase Keys in Vercel settings.'}`);
+                }
             } catch (error) {
-                renderResult('failed', "Connection error.");
+                console.error("Network Error:", error);
+                renderResult('failed', "Network Error: Could not connect to the API API folder missing or Vercel routing failed.");
             }
         }
 
@@ -323,19 +300,18 @@
             icon.className = 'result-icon';
             time.innerText = new Date().toLocaleString();
 
-            // Status hamesha failed hi aayega, par aage badalne ki zarurat pade toh codes intact hain
             if (status === 'success') {
                 icon.classList.add('success');
                 icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
                 title.innerText = "Verification Successful";
                 title.style.color = "var(--success)";
-                desc.innerText = "Your device has been securely verified and linked to your profile.";
+                desc.innerText = customDesc || "Your device has been securely verified and linked to your profile.";
             } else if (status === 'failed') {
                 icon.classList.add('failed');
                 icon.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
                 title.innerText = "Verification Failed";
                 title.style.color = "var(--danger)";
-                desc.innerText = customDesc || "Device fingerprint mismatch or unauthorized access detected.";
+                desc.innerText = customDesc || "Verification rejected.";
             } else if (status === 'already_verified') {
                 icon.classList.add('already');
                 icon.innerHTML = '<i class="fa-solid fa-shield-check"></i>';
