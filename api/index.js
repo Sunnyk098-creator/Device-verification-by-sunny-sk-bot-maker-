@@ -21,8 +21,8 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getDatabase(firebaseApp);
 
 app.post('/api/verify', async (req, res) => {
-    // Ab frontend se secretId bhi aa raha hai
-    const { botName, userId, userName, ip, deviceData, secretId } = req.body;
+    // Hardware ID ab naya hathiyar hai
+    const { botName, userId, userName, ip, deviceData, secretId, hardwareId } = req.body;
 
     if (!botName || !userId) {
         return res.status(400).json({ error: 'Missing Data' });
@@ -41,7 +41,7 @@ app.post('/api/verify', async (req, res) => {
         }
     }
 
-    // --- DATABASE STRICT SECURITY CHECK ---
+    // --- STRICT DATABASE SECURITY CHECK ---
     try {
         const dbRef = ref(db);
         const botRef = child(dbRef, botName);
@@ -55,25 +55,30 @@ app.post('/api/verify', async (req, res) => {
                 return res.json({ status: 'already_verified' });
             }
 
-            // 2. Loop through all verified users to catch Frauds
+            // 2. Loop through all verified users to catch Clones & Frauds
             for (const [existingUserId, userData] of Object.entries(allUsers)) {
                 
-                // Hum sirf unhe check karenge jo pehle Success hue the aur jinki ID alag hai
                 if (existingUserId !== userId && userData.status === 'success') {
                     
-                    // 👉 BLOCK CONDITION: Agar IP same hai YA Secret ID same hai
-                    if (userData.ip === ip || userData.secretId === secretId) {
+                    // 👉 THE CLONE BLOCKER: Hardware ID check
+                    // Agar Hardware ID (GPU Fingerprint), ya Storage ID, ya exact IP (without Wi-Fi excuse) same hai
+                    if (userData.hardwareId === hardwareId || userData.secretId === secretId || userData.ip === ip) {
                         
-                        // Fake Verification pakdi gayi, Database mein Fail mark karo
+                        // Fake Verification pakdi gayi
+                        let blockReason = 'duplicate_ip_detected';
+                        if (userData.hardwareId === hardwareId) blockReason = 'cloned_app_hardware_detected';
+                        else if (userData.secretId === secretId) blockReason = 'duplicate_browser_storage';
+
                         await set(ref(db, `/${botName}/${userId}`), {
                             name: userName,
                             userid: userId,
                             verified: false,
                             status: 'failed',
-                            reason: userData.ip === ip ? 'duplicate_ip_detected' : 'duplicate_secret_id_detected',
+                            reason: blockReason,
                             ip: ip,
                             device: deviceData,
-                            secretId: secretId, // Record secret id to analyze frauds later
+                            hardwareId: hardwareId,
+                            secretId: secretId,
                             timestamp: Date.now()
                         });
                         return res.json({ status: 'failed' });
@@ -83,7 +88,6 @@ app.post('/api/verify', async (req, res) => {
         }
 
         // --- SUCCESS SAVE ---
-        // Sab clean hai, isliye database mein IP aur Secret ID dono save karo future checking ke liye
         await set(ref(db, `/${botName}/${userId}`), {
             name: userName,
             userid: userId,
@@ -91,6 +95,7 @@ app.post('/api/verify', async (req, res) => {
             status: 'success',
             ip: ip,
             device: deviceData,
+            hardwareId: hardwareId, // Save GPU signature
             secretId: secretId,
             timestamp: Date.now()
         });
