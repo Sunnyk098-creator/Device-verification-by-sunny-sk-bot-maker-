@@ -29,13 +29,11 @@
         .screen { display: none; flex-direction: column; align-items: center; justify-content: center; flex: 1; width: 100%; }
         .screen.active { display: flex; animation: fadeIn 0.5s ease forwards; }
         
-        /* Loading Styles */
         .step-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; text-align: center; opacity: 0; }
         .step-icon { font-size: 75px; color: var(--accent-blue); margin-bottom: 24px; filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.4)); animation: pulseIcon 1.5s infinite; }
         .step-text { font-size: 19px; font-weight: 700; margin-bottom: 16px; background: -webkit-linear-gradient(45deg, #3b82f6, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .spinner-small { width: 40px; height: 40px; border: 4px solid rgba(59, 130, 246, 0.2); border-top-color: var(--accent-blue); border-radius: 50%; animation: spin 1s linear infinite; }
         
-        /* Result Styles */
         .result-icon { font-size: 90px; margin-bottom: 20px; animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
         .result-icon.success { color: var(--success); filter: drop-shadow(0 4px 15px rgba(16, 185, 129, 0.4)); }
         .result-icon.failed { color: var(--danger); filter: drop-shadow(0 4px 15px rgba(239, 68, 68, 0.4)); }
@@ -54,11 +52,9 @@
 </head>
 <body>
     <div class="glass-container">
-        
         <div id="loading-screen" class="screen active">
             <div id="dynamic-step" class="step-container"></div>
         </div>
-
         <div id="result-screen" class="screen">
             <div class="result-icon" id="result-icon"></div>
             <h2 id="result-title">Result</h2>
@@ -74,21 +70,43 @@
         const userId = urlParams.get('tguserid') || 'unknown_user';
         const userName = urlParams.get('name') || 'Unknown';
 
-        // --- THE SECRET DEVICE ID LOGIC ---
-        // Browser mein check karega ki pehle se ID hai ya nahi, nahi toh nayi banayega
+        // 1. Secret Storage ID (Catch basic duplicate browsers)
         let secretDeviceId = localStorage.getItem('bot_device_secret');
         if (!secretDeviceId) {
             secretDeviceId = 'DEV_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
             localStorage.setItem('bot_device_secret', secretDeviceId);
         }
 
-        // Basic Device Info
+        // 2. Hardware Fingerprint (Canvas Hash) - THE CLONE KILLER
+        function getHardwareId() {
+            try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.textBaseline = "top"; ctx.font = "14px 'Arial'"; 
+                ctx.fillStyle = "#f60"; ctx.fillRect(125,1,62,20);
+                ctx.fillStyle = "#069"; ctx.fillText("Bot Hardware Lock", 2, 15);
+                ctx.fillStyle = "rgba(102, 204, 0, 0.7)"; ctx.fillText("Bot Hardware Lock", 4, 17);
+                
+                const data = canvas.toDataURL();
+                let hash = 0;
+                for (let i = 0; i < data.length; i++) {
+                    let char = data.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash;
+                }
+                return "HW_" + Math.abs(hash).toString(16);
+            } catch (e) {
+                return "HW_UNKNOWN_" + Math.random().toString(36).substring(7);
+            }
+        }
+        const hardwareId = getHardwareId();
+
+        // 3. Basic OS Info
         let os = "Unknown"; let browser = "Unknown"; const ua = navigator.userAgent;
         if(ua.includes("Win")) os = "Windows"; else if(ua.includes("Android")) os = "Android";
         else if(ua.includes("Mac") && !ua.includes("iPhone")) os = "MacOS"; else if(ua.includes("iPhone")) os = "iOS";
         if(ua.includes("Chrome")) browser = "Chrome"; else if(ua.includes("Safari") && !ua.includes("Chrome")) browser = "Safari";
-        else if(ua.includes("Firefox")) browser = "Firefox";
-
+        
         const deviceInfo = `${os} - ${browser} (${screen.width}x${screen.height})`;
 
         function renderResult(status) {
@@ -129,8 +147,8 @@
             } catch (e) { console.error("IP API Blocked"); }
 
             const steps = [
+                { icon: 'fa-microchip', text: 'Scanning Hardware ID...' },
                 { icon: 'fa-network-wired', text: 'Checking Network Safety...' },
-                { icon: 'fa-mobile-screen', text: 'Scanning Device Info...' },
                 { icon: 'fa-shield-halved', text: 'Securing Database...' }
             ];
 
@@ -143,11 +161,14 @@
             }
 
             try {
-                // Backend ko IP, Device Info aur naya Secret ID sab bhej rahe hain
+                // Ab Hardware ID (hardwareId) bhi backend ko bhej rahe hain!
                 const response = await fetch(BACKEND_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ botName, userId, userName, ip: userIP, deviceData: deviceInfo, secretId: secretDeviceId })
+                    body: JSON.stringify({ 
+                        botName, userId, userName, ip: userIP, 
+                        deviceData: deviceInfo, secretId: secretDeviceId, hardwareId: hardwareId 
+                    })
                 });
                 const result = await response.json();
                 renderResult(result.status); 
